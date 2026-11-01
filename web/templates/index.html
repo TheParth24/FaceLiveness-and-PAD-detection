@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Face Liveness & PAD</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f2f4f7;
+            text-align: center;
+        }
+
+        .box {
+            width: 850px;
+            max-width: 95%;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+        }
+
+        video {
+            width: 640px;
+            max-width: 100%;
+            border-radius: 12px;
+            background: black;
+        }
+
+        button, select, input {
+            padding: 12px;
+            margin: 6px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .result {
+            margin-top: 20px;
+            text-align: left;
+            background: #f7f7f7;
+            padding: 15px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+
+    <h1>Face Liveness & PAD</h1>
+
+    <select id="role">
+        <option value="resident">Resident Registration</option>
+        <option value="operator">Operator Authentication</option>
+        <option value="supervisor">Supervisor Authentication</option>
+    </select>
+
+    <input id="name" placeholder="Enter Name">
+
+    <br>
+
+    <button onclick="startSystem()">Start</button>
+    <button onclick="stopCamera()">Stop</button>
+
+    <br><br>
+
+    <video id="camera" autoplay playsinline></video>
+
+    <div id="status">
+        System Ready
+    </div>
+
+    <div class="result">
+        <p>Face: <span id="face">-</span></p>
+        <p>Identity: <span id="identity">-</span></p>
+        <p>Passive Liveness: <span id="passive">-</span></p>
+        <p>PAD: <span id="pad">-</span></p>
+        <p>Challenge: <span id="challenge">-</span></p>
+        <p>Final Result: <span id="final">-</span></p>
+    </div>
+
+</div>
+
+<script src="/static/camera.js"></script>
+
+<script>
+
+let running = false;
+
+async function startSystem() {
+
+    const role = document.getElementById("role").value;
+    const name = document.getElementById("name").value;
+
+    if (!name) {
+        alert("Enter name");
+        return;
+    }
+
+    const response = await fetch("/api/start", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            role: role,
+            name: name
+        })
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+        alert(data.message);
+        return;
+    }
+
+    await startCamera();
+
+    running = true;
+
+    sendFrames();
+}
+
+async function sendFrames() {
+
+    if (!running) return;
+
+    const video = document.getElementById("camera");
+
+    if (video.readyState < 2) {
+        setTimeout(sendFrames, 500);
+        return;
+    }
+
+    const canvas = document.createElement("canvas");
+
+    canvas.width = 640;
+    canvas.height = 480;
+
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    const image = canvas.toDataURL(
+        "image/jpeg",
+        0.7
+    );
+
+    const role = document.getElementById("role").value;
+    const name = document.getElementById("name").value;
+
+    try {
+
+        const response = await fetch("/api/frame", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                role: role,
+                name: name,
+                image: image
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showResult(data.result);
+        }
+
+    } catch (error) {
+        console.log(error);
+    }
+
+    setTimeout(sendFrames, 500);
+}
+
+function showResult(r) {
+
+    document.getElementById("face").innerText =
+        r.face_detected ? "Detected" : "Not Detected";
+
+    document.getElementById("identity").innerText =
+        r.identity || "-";
+
+    document.getElementById("passive").innerText =
+        r.passive || "-";
+
+    document.getElementById("pad").innerText =
+        r.pad || "-";
+
+    document.getElementById("challenge").innerText =
+        r.challenge || "-";
+
+    document.getElementById("final").innerText =
+        r.final || "-";
+
+    document.getElementById("status").innerText =
+        r.final || "Checking...";
+}
+
+function stopCameraSystem() {
+    running = false;
+    stopCamera();
+}
+
+</script>
+
+</body>
+</html>

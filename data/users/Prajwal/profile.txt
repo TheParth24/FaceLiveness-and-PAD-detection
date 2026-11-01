@@ -1,0 +1,3 @@
+Role: RESIDENT
+Name: Prajwal
+Registered: 2026-10-29 21:50:06
